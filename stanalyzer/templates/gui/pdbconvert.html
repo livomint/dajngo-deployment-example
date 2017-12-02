@@ -1,0 +1,315 @@
+<script type="text/javascript">
+var $j = jQuery.noConflict();
+var mySystem;		// this gloabl value containing system information defined in 'index.html' when $j('.next-tab').click() is trigged!
+
+function pdbconvert_isNumberKey(evt) {
+    var charCode = (evt.which) ? evt.which : event.keyCode
+    if ((charCode > 31 && charCode < 45) || (charCode > 45 && charCode < 48) || (charCode > 57 && charCode < 59) || (charCode > 59)) {
+	msg = "<span class='message_warn'><i>Using ';' for multiple frames and '-' for continuous frames</i></span>";
+	$j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #define_pdbconvert #vfy_msg0").empty().append(msg);
+	$j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #define_pdbconvert #pdbconvert_frmInt").focus();
+	return false;
+    } else {
+	msg = "<i>Using ';' for multiple frames and '-' for continuous frames</i>";
+	$j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #define_pdbconvert #vfy_msg0").empty().append(msg);
+	$j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #define_pdbconvert #pdbconvert_frmInt").focus();
+    }
+    return true;
+}
+
+/* ##########################################
+ * Main function starts
+ * ########################################## */
+
+var cnt_pdbconvert = 0; // total number of options in this module  
+
+$j(document).ready(function(){
+  // *** Hidden processdure: Read system information from index.html when $j('.next-tab').click(function(){}); is triggered
+
+/*----------------------------------------------------
+ * Control events
+ * ---------------------------------------------------*/
+    // Hide options at first until the module is checked
+    $j("#C_pdbconvert #M_pdbconvert #pdbconvert2").hide();
+    $j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #adjcenter_pdbconvert").hide();
+    
+    // defining default value of initial forms
+    $j('#C_pdbconvert #M_pdbconvert #pdbconvert2 #pdbconvert_frmInt').val('1').css("color", "gray");
+    $j('#C_pdbconvert #M_pdbconvert #pdbconvert2 #pdbconvert_outFile').val('pdbconvert.pdb').css("color", "gray");
+    $j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #adjcenter_pdbconvert #txt_memb").empty().val("Define 'segid' or 'resname' to be centered! (e.g. segid MEMB)");
+    $j('#C_pdbconvert #M_pdbconvert #pdbconvert2 #cnt_radio_pdbconvert_no').attr('checked', 'checked');
+    $j('#C_pdbconvert #M_pdbconvert #pdbconvert2 #pdbconvert_single').attr('checked', 'checked');
+    
+    
+    //---> Add count to total number of selected modules
+    $j("#C_pdbconvert #M_pdbconvert #pdbconvert1 #pdbconvert_title").live("click", function() {
+	$j("#vfy_msg").empty();
+	var chk = $j(this).prop('checked');
+	if (chk == true) {
+	    $cnt_modules++; // global variable to count all selected modules
+	    cnt_pdbconvert++; // count options in this module
+	    
+	    /* ----- reading system information ----- */
+	    // Reading total number of atoms
+	    var num_total_atoms = $j("#step2 #num_atoms").text();	// total number of atoms in the system
+	    var num_files = $j("#step2 #num_files").text();		// total number of selected trajectory files 
+	    var frames_per_trj = $j("#step2 #num_frame").text();	// number of frames per a trajectory file (e.g. each DCD file)
+	    var ps_per_frame = $j("#step2 #num_ps").text();		// duration of simulation for each frame in picoseconds
+	    
+	    // total number of atoms are required for parameter passing
+	    $j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #pdbconvert_hist_tatoms").empty().val(num_total_atoms);
+
+	} else {
+	    $cnt_modules--;
+	    cnt_pdbconvert--;
+	    if ($cnt_modules < 0) {
+		$cnt_modules = 0;
+	    }
+    	    if (cnt_pdbconvert < 0) {
+		cnt_pdbconvert = 0;
+	    }
+	}
+	$j("#C_pdbconvert #M_pdbconvert #pdbconvert1 #cnt_pdbconvert").empty().append(cnt_pdbconvert); 	// updating currently selected options in this module
+	$j("#cnt_modules").empty().append($cnt_modules);					// updating the count for all selected modules
+	$j("#C_pdbconvert #M_pdbconvert #pdbconvert2").toggle(this.checked);
+    });
+    
+    //---> show/hide the centering form upon the event of clicking yes/no radio button
+    $j("#C_pdbconvert #M_pdbconvert #pdbconvert2 input:radio[name=cnt_radio_pdbconvert]").each(function(i){
+	$j(this).click(function() {
+	    if (i == 0) {
+		$j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #adjcenter_pdbconvert #txt_memb").removeAttr("disabled");
+		$j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #adjcenter_pdbconvert").show();
+	    }
+	    else {
+		$j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #adjcenter_pdbconvert #txt_memb").attr("disabled", "disabled");
+		$j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #adjcenter_pdbconvert").hide();
+	    }
+	});
+    });
+    
+    //---> Verification of selection query in the centering form
+    $j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #adjcenter_pdbconvert #memb_btn_vfy").click(function(){
+	var query = $j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #adjcenter_pdbconvert #txt_memb").val().trim();
+	var bpath = $j("#proot option:selected").text().trim();
+	var stfile = $j("#stfile option:selected").text().trim();
+	var pdbfile = $j("#pdbfile option:selected").text().trim();
+	$j("#select_trj2 option").attr("selected", "selected"); 	// select all
+	var trjFile = $j("#select_trj2").val();
+	var vfy = chkSyntex(query);
+	var msgWait = "Verifying the query... <img src='/static/images/circle2.gif' height='20' width='20' >"
+
+	if (vfy["flag"]) {
+	    $j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #adjcenter_pdbconvert #vfy_msg").empty().append(vfy["err"]);
+	    return false;
+	}
+	/* display waiting message */
+
+	$j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #adjcenter_pdbconvert #vfy_msg").empty().append(msgWait);
+	    var sndData = {
+		'cmd'       : 'verify',
+		'query'	    : query,
+		'bpath'	    : bpath,
+		'stfile'    : stfile,
+		'pdbfile'   : pdbfile,
+		'trjFile[]' : trjFile,
+	    }
+
+        var request = $j.ajax({
+        type: "POST",
+        url: '/gui/verify_query/',
+        cache: false,
+        data: sndData,
+        //async: false,
+        });
+		    
+        request.done(function(Jdata) {
+            var obj = $j.parseJSON(Jdata);
+            $j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #adjcenter_pdbconvert #vfy_msg").empty().append("Verified!");
+            $j("#dlg_selInfo #dlg_msg").empty().append(obj.selInfo);
+	    $j("#dlg_selInfo").dialog({
+		resizable: true,
+		modal: true,
+		height:500,
+                width:600,
+	    });
+
+        });
+          
+        request.error(function(jqXHR, textStatus, errorThrown) {
+            $j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #adjcenter_pdbconvert #vfy_msg").empty().append(errorThrown);
+        });
+    });
+
+    // ---> initial query for pdb convert 'all': select all atoms
+    $j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #define_pdbconvert #pdbconvert_query").val('all');
+    
+    //---> Verification of selection query in pdbconvert
+    $j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #define_pdbconvert #pdb_btn_vfy").click(function(){
+	var query = $j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #define_pdbconvert #pdbconvert_query").val().trim();
+	var bpath = $j("#proot option:selected").text().trim();
+	var stfile = $j("#stfile option:selected").text().trim();
+	var pdbfile = $j("#pdbfile option:selected").text().trim();
+	$j("#select_trj2 option").attr("selected", "selected"); 	// select all
+	var trjFile = $j("#select_trj2").val();
+	var vfy = chkSyntex(query);
+	var msgWait = "Verifying the query... <img src='/static/images/circle2.gif' height='20' width='20' >"
+
+	if (vfy["flag"]) {
+	    $j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #define_pdbconvert #vfy_msg").empty().append(vfy["err"]);
+	    return false;
+	}
+	/* display waiting message */
+
+	$j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #define_pdbconvert #vfy_msg").empty().append(msgWait);
+	    var sndData = {
+		'cmd'       : 'verify',
+		'query'	    : query,
+		'bpath'	    : bpath,
+		'stfile'    : stfile,
+		'pdbfile'   : pdbfile,
+		'trjFile[]' : trjFile,
+	    }
+
+        var request = $j.ajax({
+        type: "POST",
+        url: '/gui/verify_query/',
+        cache: false,
+        data: sndData,
+        //async: false,
+        });
+		    
+        request.done(function(Jdata) {
+            var obj = $j.parseJSON(Jdata);
+            $j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #define_pdbconvert #vfy_msg").empty().append("Verified!");
+            $j("#dlg_selInfo #dlg_msg").empty().append(obj.selInfo);
+	    $j("#dlg_selInfo").dialog({
+		resizable: true,
+		modal: true,
+		height:500,
+                width:600,
+	    });
+
+        });
+          
+        request.error(function(jqXHR, textStatus, errorThrown) {
+            $j("#C_pdbconvert #M_pdbconvert #pdbconvert2 #define_pdbconvert #vfy_msg").empty().append(errorThrown);
+        });
+    });
+
+});
+</script>
+
+<div id="C_pdbconvert">
+    <table>
+	<tr><td id="head_js_script"></td></tr>
+    </table>
+    <table>
+	<tr>
+	    <td colspan="2">
+		<table id="M_pdbconvert">
+		    <!-- pdbconvert contents start -->
+		    <tr>
+			<td>
+			    <!-- displaying the name of module -->
+			    <table id="pdbconvert1">
+				<tr>
+				    <td class="st_color7 left">
+					<input type="checkbox" id="pdbconvert_title">PDB convert (<span id="cnt_pdbconvert" class="st_font1 st_size3 st_color5">0</span>)
+				    </td>
+				</tr>
+			    </table>
+			    <!-- options for pdbconvert1 -->
+			    <table id="pdbconvert2">
+				<tr>
+				    <td class="w_module"></td>
+				    <td>
+					<span class="module_font"><b>Need membrane centering?</b> </span>
+					<input type="radio" id="cnt_radio_pdbconvert_yes"  name="cnt_radio_pdbconvert" value="yes">Yes
+					<input type="radio" id="cnt_radio_pdbconvert_no"  name="cnt_radio_pdbconvert" value="no">No
+					
+				    </td>
+				</tr>
+				
+				<!-- options for centering axis --->
+				<tr>
+				    <td class="w_module"></td>
+				    <td>
+					<table id="adjcenter_pdbconvert">
+					    <tr>
+						<td>
+						    <span class="module_font"><b>Along which axis?</b> </span>
+						    <select id="cnt_axis" name="cnt_axis">
+							<option value="z"> z=0 </option>
+							<option value="y"> y=0 </option>
+							<option value="x"> x=0 </option>
+						    </select>
+						</td>
+						<td class="w15"></td>
+						<td>
+						    <span class="module_font"><b> Target: </b> </span>
+						</td>
+						<td>
+						    <textarea id="txt_memb" type="text" name="txt_center" rows="1"></textarea>
+						    <button id="memb_btn_vfy"><span class="module_font">Verify</span></button>
+						</td>
+					    </tr>
+					    <tr><td id="vfy_msg" class="center message_warn" colspan="4"></td></tr>
+					</table>
+				    </td>
+				</tr>
+
+				<tr>
+				    <td class="w_module"></td>
+				    <td>
+					<table id="define_pdbconvert">
+					    <tr>
+						<td class="bottom"><span class="module_font"><b>Define frame(s)</b>: <div id="vfy_msg0" colspan==9><i>Using ';' for multiple frames and '-' for continuous frames</i></div></span></td>
+						<td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+					    </tr>
+					    <tr>
+						<td class="bottom"><input id="pdbconvert_frmInt" class="module_txtbox_output3" type="text" onkeypress="return pdbconvert_isNumberKey(event)" name="pdbconvert_frmInt"></td>	
+						<td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+					    </tr>
+					    <tr>
+						<td class="bottom" colspan=9>
+						    <span class="module_font"><b>Output File Name</b>:
+						    <input id="pdbconvert_single" type="checkbox" name="pdbconvert_single"> Write all trajectories into a PDB file </span>
+						</td>
+						<td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td>
+					    </tr>
+					    <tr>
+						<td class="bottom" colspan=9><input id="pdbconvert_outFile" class="module_txtbox_output3" type="text" name="pdbconvert_outFile"></td>
+					    </tr>
+					    <tr>
+						<td class="bottom" colspan=9> <span class="module_font"><b>Selection query</b></span> </td>
+					    </tr>
+					    <tr>
+						<td class="bottom" colspan=9>
+						    <textarea class="bottom" id="pdbconvert_query" name="pdbconvert_query" rows="2" cols="47"></textarea>
+						    <button id="pdb_btn_vfy"><span class="module_font">Verify</span></button>
+						</td>
+					    </tr>
+					    <tr><td id="vfy_msg" class="center message_warn" colspan="9"></td></tr>
+					</table>
+				    </td>
+				</tr>
+				<!-- having information about the system -->
+				<tr><td class="bottom" colspan="12"><input id="pdbconvert_hist_tatoms" type="hidden" name="pdbconvert_hist_tatoms"></td></tr>
+				<tr><td id="vfy_msg0" mygui="0" class="center message_warn" colspan="12"></td></tr>					    
+			    </table>
+			</td>
+		    </tr>
+		    <!-- pdbconvert contents end  -->
+		</table>
+	    </td>
+	</tr>
+    </table>
+    <table>
+	<tr>
+	    <td id=""bottom_js_script"></td>
+	</tr>
+    </table>
+</div>
+
+
